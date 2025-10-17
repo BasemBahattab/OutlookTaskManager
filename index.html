@@ -1,852 +1,182 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Task Delegation Manager</title>
-    
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap Icons -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-    <!-- Font Awesome -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    
-    <!-- Office JS -->
-    <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js" type="text/javascript"></script>
-    
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 0;
-            margin: 0;
-        }
-        
-        .main-container {
-            background: white;
-            min-height: 100vh;
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
-        }
-        
-        .header-section {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 0 0 15px 15px;
-            margin-bottom: 20px;
-        }
-        
-        .task-card {
-            border: none;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            transition: transform 0.3s;
-            margin-bottom: 15px;
-        }
-        
-        .task-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
-        }
-        
-        .status-badge {
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-        
-        .status-pending { background: #ffeaa7; color: #fdcb6e; }
-        .status-in-progress { background: #74b9ff; color: #0984e3; }
-        .status-completed { background: #55efc4; color: #00b894; }
-        .status-overdue { background: #ff7675; color: #d63031; }
-        
-        .email-attachment {
-            background: #f8f9fa;
-            border: 1px dashed #dee2e6;
-            border-radius: 8px;
-            padding: 15px;
-            margin-top: 10px;
-        }
-        
-        .nav-tabs .nav-link {
-            color: #6c757d;
-            border: none;
-            border-bottom: 3px solid transparent;
-        }
-        
-        .nav-tabs .nav-link.active {
-            color: #667eea;
-            border-bottom: 3px solid #667eea;
-            background: transparent;
-        }
-        
-        .stats-card {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            margin-bottom: 20px;
-        }
-        
-        .stats-number {
-            font-size: 2rem;
-            font-weight: bold;
-            color: #667eea;
-        }
-        
-        .timeline-item {
-            position: relative;
-            padding-left: 40px;
-            margin-bottom: 20px;
-        }
-        
-        .timeline-item::before {
-            content: '';
-            position: absolute;
-            left: 10px;
-            top: 5px;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: #667eea;
-        }
-        
-        .timeline-item::after {
-            content: '';
-            position: absolute;
-            left: 14px;
-            top: 15px;
-            width: 2px;
-            height: calc(100% + 10px);
-            background: #e9ecef;
-        }
-        
-        .timeline-item:last-child::after {
-            display: none;
-        }
-        
-        .loading-spinner {
-            display: none;
-            text-align: center;
-            padding: 40px;
-        }
-        
-        .floating-btn {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            font-size: 24px;
-            transition: transform 0.3s;
-        }
-        
-        .floating-btn:hover {
-            transform: scale(1.1);
-        }
-        
-        .office-not-ready {
-            background: #fff3cd;
-            border: 1px solid #ffc107;
-            border-radius: 5px;
-            padding: 10px;
-            margin-bottom: 20px;
-            display: none;
-        }
-    </style>
-</head>
-<body>
-    <div class="main-container">
-        <!-- Header -->
-        <div class="header-section">
-            <h4><i class="fas fa-tasks"></i> Task Delegation Manager</h4>
-            <p class="mb-0">Manage and track your delegated tasks efficiently</p>
-        </div>
-        
-        <!-- Main Content -->
-        <div class="container-fluid px-4">
-            <!-- Office Warning (shown when not in Outlook) -->
-            <div class="office-not-ready" id="officeWarning">
-                <i class="fas fa-info-circle"></i> Running in standalone mode. Install in Outlook for full email integration.
-            </div>
-            
-            <!-- View Toggle -->
-            <ul class="nav nav-tabs mb-4" id="viewTabs">
-                <li class="nav-item">
-                    <a class="nav-link active" href="#" data-view="dashboard">
-                        <i class="fas fa-tachometer-alt"></i> Dashboard
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="#" data-view="create">
-                        <i class="fas fa-plus-circle"></i> Create Task
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="#" data-view="tasks">
-                        <i class="fas fa-list"></i> All Tasks
-                    </a>
-                </li>
-            </ul>
-            
-            <!-- Loading Spinner -->
-            <div class="loading-spinner">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </div>
-                <p class="mt-2">Loading email data...</p>
-            </div>
-            
-            <!-- Dashboard View -->
-            <div id="dashboardView" class="view-content">
-                <div class="row">
-                    <!-- Statistics -->
-                    <div class="col-md-3 col-6">
-                        <div class="stats-card">
-                            <div class="d-flex align-items-center">
-                                <i class="fas fa-tasks fa-2x text-primary me-3"></i>
-                                <div>
-                                    <div class="stats-number" id="totalTasks">12</div>
-                                    <div class="text-muted">Total Tasks</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3 col-6">
-                        <div class="stats-card">
-                            <div class="d-flex align-items-center">
-                                <i class="fas fa-clock fa-2x text-warning me-3"></i>
-                                <div>
-                                    <div class="stats-number text-warning" id="pendingTasks">5</div>
-                                    <div class="text-muted">Pending</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3 col-6">
-                        <div class="stats-card">
-                            <div class="d-flex align-items-center">
-                                <i class="fas fa-spinner fa-2x text-info me-3"></i>
-                                <div>
-                                    <div class="stats-number text-info" id="inProgressTasks">4</div>
-                                    <div class="text-muted">In Progress</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3 col-6">
-                        <div class="stats-card">
-                            <div class="d-flex align-items-center">
-                                <i class="fas fa-check-circle fa-2x text-success me-3"></i>
-                                <div>
-                                    <div class="stats-number text-success" id="completedTasks">3</div>
-                                    <div class="text-muted">Completed</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Current Tasks -->
-                <div class="row mt-4">
-                    <div class="col-md-8">
-                        <h5 class="mb-3"><i class="fas fa-list-check"></i> Current Tasks</h5>
-                        <div id="currentTasksList">
-                            <!-- Tasks will be populated here -->
-                        </div>
-                    </div>
-                    
-                    <!-- Recent Updates -->
-                    <div class="col-md-4">
-                        <h5 class="mb-3"><i class="fas fa-history"></i> Recent Updates</h5>
-                        <div id="recentUpdates">
-                            <!-- Updates will be populated here -->
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Create Task View -->
-            <div id="createTaskView" class="view-content" style="display: none;">
-                <div class="row justify-content-center">
-                    <div class="col-md-8">
-                        <div class="card">
-                            <div class="card-body">
-                                <h5 class="card-title mb-4"><i class="fas fa-plus-square"></i> Create New Task</h5>
-                                
-                                <!-- Email Attachment Info -->
-                                <div class="email-attachment" id="emailAttachment" style="display: none;">
-                                    <h6><i class="fas fa-envelope"></i> Attached Email</h6>
-                                    <div id="emailInfo">
-                                        <p class="mb-1"><strong>Subject:</strong> <span id="emailSubject"></span></p>
-                                        <p class="mb-1"><strong>From:</strong> <span id="emailFrom"></span></p>
-                                        <p class="mb-2"><strong>Date:</strong> <span id="emailDate"></span></p>
-                                        <button class="btn btn-sm btn-outline-primary" id="downloadEmail">
-                                            <i class="fas fa-download"></i> Download Email
-                                        </button>
-                                    </div>
-                                </div>
-                                
-                                <!-- Task Form -->
-                                <form id="taskForm">
-                                    <div class="mb-3">
-                                        <label class="form-label"><i class="fas fa-heading"></i> Task Title</label>
-                                        <input type="text" class="form-control" id="taskTitle" required>
-                                    </div>
-                                    
-                                    <div class="mb-3">
-                                        <label class="form-label"><i class="fas fa-align-left"></i> Description</label>
-                                        <textarea class="form-control" id="taskDescription" rows="3" required></textarea>
-                                    </div>
-                                    
-                                    <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label"><i class="fas fa-user"></i> Assign To</label>
-                                            <input type="email" class="form-control" id="assignTo" placeholder="email@example.com" required>
-                                        </div>
-                                        
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label"><i class="fas fa-flag"></i> Priority</label>
-                                            <select class="form-select" id="priority">
-                                                <option value="low">Low</option>
-                                                <option value="medium" selected>Medium</option>
-                                                <option value="high">High</option>
-                                                <option value="urgent">Urgent</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label"><i class="fas fa-calendar"></i> Due Date</label>
-                                            <input type="date" class="form-control" id="dueDate" required>
-                                        </div>
-                                        
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label"><i class="fas fa-folder"></i> Category</label>
-                                            <select class="form-select" id="category">
-                                                <option value="general">General</option>
-                                                <option value="project">Project</option>
-                                                <option value="meeting">Meeting Follow-up</option>
-                                                <option value="review">Review</option>
-                                                <option value="approval">Approval</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="mb-3">
-                                        <label class="form-label"><i class="fas fa-tags"></i> Tags (comma separated)</label>
-                                        <input type="text" class="form-control" id="tags" placeholder="urgent, client, proposal">
-                                    </div>
-                                    
-                                    <div class="d-grid gap-2">
-                                        <button type="submit" class="btn btn-primary">
-                                            <i class="fas fa-check-circle"></i> Create Task
-                                        </button>
-                                        <button type="button" class="btn btn-outline-secondary" id="cancelCreate">
-                                            <i class="fas fa-times"></i> Cancel
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- All Tasks View -->
-            <div id="tasksView" class="view-content" style="display: none;">
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-search"></i></span>
-                            <input type="text" class="form-control" id="searchTasks" placeholder="Search tasks...">
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <select class="form-select" id="filterStatus">
-                            <option value="">All Status</option>
-                            <option value="pending">Pending</option>
-                            <option value="in-progress">In Progress</option>
-                            <option value="completed">Completed</option>
-                            <option value="overdue">Overdue</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <select class="form-select" id="sortTasks">
-                            <option value="date-desc">Newest First</option>
-                            <option value="date-asc">Oldest First</option>
-                            <option value="priority">Priority</option>
-                            <option value="due-date">Due Date</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div id="allTasksList">
-                    <!-- All tasks will be populated here -->
-                </div>
-            </div>
-        </div>
-        
-        <!-- Floating Action Button -->
-        <button class="floating-btn" id="floatingCreateBtn" title="Create New Task">
-            <i class="fas fa-plus"></i>
-        </button>
-    </div>
-    
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <script>
-        // Global variables
-        let isOfficeInitialized = false;
-        let currentEmail = null;
-        
-        // Sample task data
-        let tasks = [
-            {
-                id: 1,
-                title: "Review Q4 Budget Proposal",
-                description: "Review and approve the Q4 budget proposal document",
-                assignedTo: "john.doe@company.com",
-                priority: "high",
-                status: "in-progress",
-                dueDate: "2025-10-25",
-                category: "review",
-                createdDate: "2025-10-15",
-                lastUpdate: "2 hours ago",
-                updateMessage: "John commented on the task"
-            },
-            {
-                id: 2,
-                title: "Prepare Client Presentation",
-                description: "Create presentation for upcoming client meeting",
-                assignedTo: "jane.smith@company.com",
-                priority: "urgent",
-                status: "pending",
-                dueDate: "2025-10-20",
-                category: "project",
-                createdDate: "2025-10-14",
-                lastUpdate: "5 hours ago",
-                updateMessage: "Task assigned to Jane"
-            },
-            {
-                id: 3,
-                title: "Update Documentation",
-                description: "Update project documentation with latest changes",
-                assignedTo: "mike.wilson@company.com",
-                priority: "medium",
-                status: "completed",
-                dueDate: "2025-10-18",
-                category: "general",
-                createdDate: "2025-10-10",
-                lastUpdate: "1 day ago",
-                updateMessage: "Task marked as completed"
-            }
-        ];
-        
-        // Check if Office.js is available
-        if (typeof Office !== 'undefined') {
-            // Office initialization
-            Office.initialize = function(reason) {
-                isOfficeInitialized = true;
-                document.addEventListener('DOMContentLoaded', function() {
-                    loadCurrentEmail();
-                    initializeApp();
-                });
-            };
-        } else {
-            // Fallback for standalone mode
-            document.addEventListener('DOMContentLoaded', function() {
-                console.log('Running in standalone mode (Office.js not available)');
-                document.getElementById('officeWarning').style.display = 'block';
-                initializeApp();
-                
-                // Mock email data for testing
-                currentEmail = {
-                    subject: 'Sample Email Subject',
-                    from: 'sender@example.com',
-                    date: new Date().toLocaleDateString(),
-                    body: 'This is a sample email body for testing purposes.'
-                };
-            });
-        }
-        
-        // Load current email if in Outlook
-        function loadCurrentEmail() {
-            if (isOfficeInitialized && Office.context && Office.context.mailbox && Office.context.mailbox.item) {
-                try {
-                    const item = Office.context.mailbox.item;
-                    currentEmail = {
-                        subject: item.subject || 'No subject',
-                        from: item.from ? item.from.emailAddress : 'Unknown',
-                        date: item.dateTimeCreated ? new Date(item.dateTimeCreated).toLocaleDateString() : new Date().toLocaleDateString(),
-                        body: ''
-                    };
-                    
-                    // Get email body
-                    item.body.getAsync(Office.CoercionType.Text, function(result) {
-                        if (result.status === Office.AsyncResultStatus.Succeeded) {
-                            currentEmail.body = result.value;
-                        }
-                    });
-                    
-                    // Show email attachment info if creating task from email
-                    if (getQueryParam('action') === 'create') {
-                        showEmailAttachment();
-                    }
-                } catch (error) {
-                    console.error('Error loading email:', error);
-                }
-            }
-        }
-        
-        // Get query parameters
-        function getQueryParam(param) {
-            const urlParams = new URLSearchParams(window.location.search);
-            return urlParams.get(param);
-        }
-        
-        // Initialize the app
-        function initializeApp() {
-            // Check for view parameter
-            const view = getQueryParam('view');
-            if (view === 'create' || getQueryParam('action') === 'create') {
-                showView('create');
-            } else if (view === 'tasks') {
-                showView('tasks');
-            } else {
-                showView('dashboard');
-            }
-            
-            // Load initial data
-            loadTasksFromStorage();
-            updateDashboard();
-            loadAllTasks();
-            loadRecentUpdates();
-            
-            // Event listeners
-            setupEventListeners();
-        }
-        
-        // Load tasks from localStorage
-        function loadTasksFromStorage() {
-            try {
-                const stored = localStorage.getItem('outlookTasks');
-                if (stored) {
-                    tasks = JSON.parse(stored);
-                }
-            } catch (error) {
-                console.error('Error loading tasks:', error);
-            }
-        }
-        
-        // Save tasks to localStorage
-        function saveTasksToStorage() {
-            try {
-                localStorage.setItem('outlookTasks', JSON.stringify(tasks));
-            } catch (error) {
-                console.error('Error saving tasks:', error);
-            }
-        }
-        
-        // Setup event listeners
-        function setupEventListeners() {
-            // Navigation tabs
-            document.querySelectorAll('.nav-link').forEach(link => {
-                link.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    const view = this.getAttribute('data-view');
-                    showView(view);
-                });
-            });
-            
-            // Task form submission
-            document.getElementById('taskForm').addEventListener('submit', function(e) {
-                e.preventDefault();
-                createTask();
-            });
-            
-            // Cancel create
-            document.getElementById('cancelCreate').addEventListener('click', function() {
-                showView('dashboard');
-            });
-            
-            // Floating button
-            document.getElementById('floatingCreateBtn').addEventListener('click', function() {
-                showView('create');
-            });
-            
-            // Download email
-            document.getElementById('downloadEmail').addEventListener('click', function() {
-                downloadEmailAsFile();
-            });
-            
-            // Search tasks
-            document.getElementById('searchTasks').addEventListener('input', function() {
-                filterTasks();
-            });
-            
-            // Filter status
-            document.getElementById('filterStatus').addEventListener('change', function() {
-                filterTasks();
-            });
-            
-            // Sort tasks
-            document.getElementById('sortTasks').addEventListener('change', function() {
-                sortAndDisplayTasks();
-            });
-        }
-        
-        // Show view
-        function showView(view) {
-            // Hide all views
-            document.querySelectorAll('.view-content').forEach(v => {
-                v.style.display = 'none';
-            });
-            
-            // Remove active from all tabs
-            document.querySelectorAll('.nav-link').forEach(link => {
-                link.classList.remove('active');
-            });
-            
-            // Show selected view and activate tab
-            if (view === 'dashboard') {
-                document.getElementById('dashboardView').style.display = 'block';
-                document.querySelector('[data-view="dashboard"]').classList.add('active');
-            } else if (view === 'create') {
-                document.getElementById('createTaskView').style.display = 'block';
-                document.querySelector('[data-view="create"]').classList.add('active');
-                if (currentEmail) {
-                    showEmailAttachment();
-                }
-            } else if (view === 'tasks') {
-                document.getElementById('tasksView').style.display = 'block';
-                document.querySelector('[data-view="tasks"]').classList.add('active');
-            }
-        }
-        
-        // Show email attachment
-        function showEmailAttachment() {
-            if (currentEmail) {
-                document.getElementById('emailAttachment').style.display = 'block';
-                document.getElementById('emailSubject').textContent = currentEmail.subject || 'No subject';
-                document.getElementById('emailFrom').textContent = currentEmail.from || 'Unknown sender';
-                document.getElementById('emailDate').textContent = currentEmail.date;
-                
-                // Pre-fill task title with email subject
-                document.getElementById('taskTitle').value = 'Task: ' + (currentEmail.subject || 'Email Task');
-            }
-        }
-        
-        // Create task
-        function createTask() {
-            const newTask = {
-                id: Date.now(),
-                title: document.getElementById('taskTitle').value,
-                description: document.getElementById('taskDescription').value,
-                assignedTo: document.getElementById('assignTo').value,
-                priority: document.getElementById('priority').value,
-                status: 'pending',
-                dueDate: document.getElementById('dueDate').value,
-                category: document.getElementById('category').value,
-                tags: document.getElementById('tags').value.split(',').map(t => t.trim()),
-                createdDate: new Date().toISOString().split('T')[0],
-                lastUpdate: 'Just now',
-                updateMessage: 'Task created',
-                emailAttached: currentEmail ? true : false,
-                email: currentEmail
-            };
-            
-            tasks.unshift(newTask);
-            saveTasksToStorage();
-            
-            // Show success message
-            showNotification('Task created successfully!', 'success');
-            
-            // Reset form
-            document.getElementById('taskForm').reset();
-            
-            // Refresh views
-            updateDashboard();
-            loadAllTasks();
-            loadRecentUpdates();
-            
-            // Go to dashboard
-            showView('dashboard');
-        }
-        
-        // Update dashboard
-        function updateDashboard() {
-            const totalTasks = tasks.length;
-            const pendingTasks = tasks.filter(t => t.status === 'pending').length;
-            const inProgressTasks = tasks.filter(t => t.status === 'in-progress').length;
-            const completedTasks = tasks.filter(t => t.status === 'completed').length;
-            
-            document.getElementById('totalTasks').textContent = totalTasks;
-            document.getElementById('pendingTasks').textContent = pendingTasks;
-            document.getElementById('inProgressTasks').textContent = inProgressTasks;
-            document.getElementById('completedTasks').textContent = completedTasks;
-            
-            // Load current tasks (non-completed)
-            const currentTasks = tasks.filter(t => t.status !== 'completed').slice(0, 5);
-            const currentTasksHtml = currentTasks.map(task => createTaskCard(task)).join('');
-            document.getElementById('currentTasksList').innerHTML = currentTasksHtml || '<p class="text-muted">No current tasks</p>';
-        }
-        
-        // Create task card HTML
-        function createTaskCard(task) {
-            const priorityColors = {
-                low: 'text-secondary',
-                medium: 'text-primary',
-                high: 'text-warning',
-                urgent: 'text-danger'
-            };
-            
-            const priorityIcons = {
-                low: 'fas fa-flag',
-                medium: 'fas fa-flag',
-                high: 'fas fa-exclamation-triangle',
-                urgent: 'fas fa-fire'
-            };
-            
-            return `
-                <div class="task-card card">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-start mb-2">
-                            <h6 class="card-title mb-0">${task.title}</h6>
-                            <span class="status-badge status-${task.status}">${task.status.replace('-', ' ')}</span>
-                        </div>
-                        <p class="card-text text-muted small">${task.description}</p>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <i class="fas fa-user-circle ${priorityColors[task.priority]}"></i>
-                                <small class="text-muted">${task.assignedTo.split('@')[0]}</small>
-                            </div>
-                            <div>
-                                <i class="far fa-calendar-alt text-muted"></i>
-                                <small class="text-muted">${task.dueDate}</small>
-                            </div>
-                            <div>
-                                <i class="${priorityIcons[task.priority]} ${priorityColors[task.priority]}"></i>
-                                <small class="${priorityColors[task.priority]}">${task.priority}</small>
-                            </div>
-                        </div>
-                        ${task.emailAttached ? '<div class="mt-2"><i class="fas fa-paperclip"></i> <small class="text-muted">Email attached</small></div>' : ''}
-                    </div>
-                </div>
-            `;
-        }
-        
-        // Load all tasks
-        function loadAllTasks() {
-            const allTasksHtml = tasks.map(task => createTaskCard(task)).join('');
-            document.getElementById('allTasksList').innerHTML = allTasksHtml || '<p class="text-muted">No tasks found</p>';
-        }
-        
-        // Load recent updates
-        function loadRecentUpdates() {
-            const updates = tasks.slice(0, 5).map(task => `
-                <div class="timeline-item">
-                    <small class="text-muted">${task.lastUpdate}</small>
-                    <p class="mb-0">${task.updateMessage}</p>
-                    <small class="text-primary">${task.title}</small>
-                </div>
-            `).join('');
-            
-            document.getElementById('recentUpdates').innerHTML = updates || '<p class="text-muted">No recent updates</p>';
-        }
-        
-        // Filter tasks
-        function filterTasks() {
-            const searchTerm = document.getElementById('searchTasks').value.toLowerCase();
-            const statusFilter = document.getElementById('filterStatus').value;
-            
-            let filteredTasks = tasks;
-            
-            if (searchTerm) {
-                filteredTasks = filteredTasks.filter(task => 
-                    task.title.toLowerCase().includes(searchTerm) ||
-                    task.description.toLowerCase().includes(searchTerm) ||
-                    task.assignedTo.toLowerCase().includes(searchTerm)
-                );
-            }
-            
-            if (statusFilter) {
-                filteredTasks = filteredTasks.filter(task => task.status === statusFilter);
-            }
-            
-            const tasksHtml = filteredTasks.map(task => createTaskCard(task)).join('');
-            document.getElementById('allTasksList').innerHTML = tasksHtml || '<p class="text-muted">No tasks found</p>';
-        }
-        
-        // Sort and display tasks
-        function sortAndDisplayTasks() {
-            const sortBy = document.getElementById('sortTasks').value;
-            let sortedTasks = [...tasks];
-            
-            switch(sortBy) {
-                case 'date-desc':
-                    sortedTasks.sort((a, b) => new Date(b.createdDate) - new Date(a.createdDate));
-                    break;
-                case 'date-asc':
-                    sortedTasks.sort((a, b) => new Date(a.createdDate) - new Date(b.createdDate));
-                    break;
-                case 'priority':
-                    const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
-                    sortedTasks.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
-                    break;
-                case 'due-date':
-                    sortedTasks.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-                    break;
-            }
-            
-            const tasksHtml = sortedTasks.map(task => createTaskCard(task)).join('');
-            document.getElementById('allTasksList').innerHTML = tasksHtml || '<p class="text-muted">No tasks found</p>';
-        }
-        
-        // Download email as file
-        function downloadEmailAsFile() {
-            if (!currentEmail) return;
-            
-            const emailContent = `Subject: ${currentEmail.subject}
-From: ${currentEmail.from}
-Date: ${currentEmail.date}
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task Manager for Outlook</title>
 
-${currentEmail.body || 'No body content'}`;
-            
-            const blob = new Blob([emailContent], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `email-${currentEmail.subject.replace(/[^a-z0-9]/gi, '_')}.txt`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            
-            showNotification('Email downloaded successfully!', 'success');
-        }
-        
-        // Show notification
-        function showNotification(message, type = 'info') {
-            const alertClass = type === 'success' ? 'alert-success' : 'alert-info';
-            const notification = document.createElement('div');
-            notification.className = `alert ${alertClass} position-fixed top-0 end-0 m-3`;
-            notification.style.zIndex = '9999';
-            notification.innerHTML = `<i class="fas fa-check-circle"></i> ${message}`;
-            document.body.appendChild(notification);
-            
-            setTimeout(() => {
-                notification.remove();
-            }, 3000);
-        }
-<script/>
+  <!-- Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+  <!-- Office.js -->
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 0;
+      margin: 0;
+    }
+
+    .main-container {
+      background: white;
+      min-height: 100vh;
+      box-shadow: 0 0 20px rgba(0,0,0,0.1);
+    }
+
+    .header-section {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 0 0 15px 15px;
+      margin-bottom: 20px;
+    }
+
+    .office-not-ready {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: 5px;
+      padding: 10px;
+      margin-bottom: 20px;
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="main-container">
+    <div class="header-section">
+      <h4><i class="fas fa-tasks"></i> Task Manager</h4>
+      <p class="mb-0">Create and manage tasks from Outlook emails</p>
+    </div>
+
+    <div class="container-fluid px-4">
+      <!-- Office Warning -->
+      <div class="office-not-ready" id="officeWarning">
+        <i class="fas fa-info-circle"></i> Running outside Outlook — install in Outlook for full email integration.
+      </div>
+
+      <!-- Content Placeholder -->
+      <div id="content">
+        <p class="text-center mt-5 text-muted">Initializing Task Manager...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    // Ensures Office.js is ready before using mailbox APIs
+    Office.onReady(function(info) {
+      if (info.host === Office.HostType.Outlook) {
+        console.log("Running in Outlook environment.");
+        initializeOutlookAddin();
+      } else {
+        // Standalone or browser mode
+        console.warn("Running outside Outlook context.");
+        document.getElementById("officeWarning").style.display = "block";
+        loadStandaloneMode();
+      }
+    });
+
+    // Outlook-specific initialization
+    function initializeOutlookAddin() {
+      try {
+        const item = Office.context.mailbox.item;
+        const emailSubject = item.subject || "No Subject";
+        const fromAddress = item.from ? item.from.emailAddress : "Unknown Sender";
+        const createdDate = item.dateTimeCreated
+          ? new Date(item.dateTimeCreated).toLocaleString()
+          : "N/A";
+
+        document.getElementById("content").innerHTML = `
+          <div class="card shadow-sm p-3 mb-4">
+            <h5><i class="fas fa-envelope"></i> Email Details</h5>
+            <p><strong>Subject:</strong> ${emailSubject}</p>
+            <p><strong>From:</strong> ${fromAddress}</p>
+            <p><strong>Date:</strong> ${createdDate}</p>
+          </div>
+          <button id="createTaskBtn" class="btn btn-primary w-100">
+            <i class="fas fa-plus-circle"></i> Create Task from Email
+          </button>
+        `;
+
+        document.getElementById("createTaskBtn").addEventListener("click", function() {
+          createTaskFromEmail(item);
+        });
+      } catch (error) {
+        console.error("Initialization error:", error);
+      }
+    }
+
+    // Create a new task (sample localStorage implementation)
+    function createTaskFromEmail(item) {
+      const task = {
+        title: "Task: " + (item.subject || "Untitled Email"),
+        from: item.from ? item.from.emailAddress : "Unknown",
+        date: new Date().toISOString(),
+        id: Date.now()
+      };
+
+      let stored = JSON.parse(localStorage.getItem("outlookTasks") || "[]");
+      stored.unshift(task);
+      localStorage.setItem("outlookTasks", JSON.stringify(stored));
+
+      document.getElementById("content").innerHTML = `
+        <div class="alert alert-success mt-3">
+          <i class="fas fa-check-circle"></i> Task created successfully from email!
+        </div>
+        <div class="mt-3">
+          <button class="btn btn-outline-primary w-100" onclick="showTaskList()">
+            <i class="fas fa-list"></i> View All Tasks
+          </button>
+        </div>
+      `;
+    }
+
+    // Load standalone mock mode
+    function loadStandaloneMode() {
+      const mockTask = {
+        subject: "Mock Email Example",
+        from: "sender@example.com",
+        date: new Date().toLocaleDateString()
+      };
+
+      document.getElementById("content").innerHTML = `
+        <div class="card shadow-sm p-3 mb-4">
+          <h5><i class="fas fa-envelope"></i> Sample Email (Standalone)</h5>
+          <p><strong>Subject:</strong> ${mockTask.subject}</p>
+          <p><strong>From:</strong> ${mockTask.from}</p>
+          <p><strong>Date:</strong> ${mockTask.date}</p>
+        </div>
+        <button class="btn btn-secondary w-100" onclick="alert('Standalone mode only — cannot access Outlook emails.')">
+          <i class="fas fa-lock"></i> Restricted (Outlook Only)
+        </button>
+      `;
+    }
+
+    // Show stored task list (simple viewer)
+    function showTaskList() {
+      const stored = JSON.parse(localStorage.getItem("outlookTasks") || "[]");
+      if (stored.length === 0) {
+        document.getElementById("content").innerHTML = `<p class="text-muted text-center mt-5">No tasks created yet.</p>`;
+        return;
+      }
+      let html = `<h5><i class="fas fa-list"></i> Your Tasks</h5>`;
+      html += stored.map(t => `
+        <div class="border rounded p-2 mb-2">
+          <strong>${t.title}</strong><br>
+          <small>From: ${t.from}</small><br>
+          <small>Date: ${new Date(t.date).toLocaleString()}</small>
+        </div>
+      `).join("");
+      document.getElementById("content").innerHTML = html;
+    }
+  </script>
+</body>
+</html>
