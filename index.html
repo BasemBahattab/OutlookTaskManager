@@ -12,6 +12,9 @@
 
   <!-- Office.js -->
   <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  
+  <!-- JSZip for creating ZIP files -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
   <style>
     body {
@@ -273,9 +276,8 @@
       });
     }
 
-    // Get email as .msg format
+    // Get email content
     function getEmailAsMimeContent(item, callback) {
-      // Get the email in MIME format (which can be saved as .msg)
       item.getAllInternetHeadersAsync(function(headersResult) {
         if (headersResult.status === Office.AsyncResultStatus.Failed) {
           console.error('Failed to get headers:', headersResult.error);
@@ -283,7 +285,6 @@
           return;
         }
 
-        // Get the body
         item.body.getAsync(Office.CoercionType.Text, function(bodyResult) {
           if (bodyResult.status === Office.AsyncResultStatus.Failed) {
             console.error('Failed to get body:', bodyResult.error);
@@ -291,7 +292,6 @@
             return;
           }
 
-          // Create email metadata
           const emailData = {
             subject: item.subject || "No Subject",
             from: item.from ? item.from.emailAddress : "Unknown",
@@ -307,26 +307,22 @@
       });
     }
 
-    // Create MSG file content from email data
-    function createMsgContent(emailData) {
-      let msg = '';
-      
-      // Add headers
-      msg += `From: ${emailData.from}\r\n`;
-      msg += `To: ${emailData.to}\r\n`;
+    // Create EML file content
+    function createEmlContent(emailData) {
+      let eml = '';
+      eml += `From: ${emailData.from}\r\n`;
+      eml += `To: ${emailData.to}\r\n`;
       if (emailData.cc) {
-        msg += `Cc: ${emailData.cc}\r\n`;
+        eml += `Cc: ${emailData.cc}\r\n`;
       }
-      msg += `Subject: ${emailData.subject}\r\n`;
-      msg += `Date: ${emailData.date}\r\n`;
-      msg += `MIME-Version: 1.0\r\n`;
-      msg += `Content-Type: text/plain; charset="utf-8"\r\n`;
-      msg += `\r\n`;
+      eml += `Subject: ${emailData.subject}\r\n`;
+      eml += `Date: ${emailData.date}\r\n`;
+      eml += `MIME-Version: 1.0\r\n`;
+      eml += `Content-Type: text/plain; charset="utf-8"\r\n`;
+      eml += `\r\n`;
+      eml += emailData.body;
       
-      // Add body
-      msg += emailData.body;
-      
-      return msg;
+      return eml;
     }
 
     // Show toast notification
@@ -351,7 +347,7 @@
       }, 3000);
     }
 
-    // Create a new task with attachment content and email saved
+    // Create a new task with ZIP file containing email and attachments
     function createTaskFromEmail(item) {
       const attachments = item.attachments || [];
       
@@ -361,7 +357,7 @@
           <div class="spinner-border text-primary" role="status">
             <span class="visually-hidden">Loading...</span>
           </div>
-          <p class="mt-3">Saving task with email and ${attachments.length} attachment(s)...</p>
+          <p class="mt-3">Creating ZIP file with email and ${attachments.length} attachment(s)...</p>
         </div>
       `;
 
@@ -372,22 +368,38 @@
           return;
         }
 
-        // Create MSG content
-        const msgContent = createMsgContent(emailData);
-        const msgBase64 = btoa(unescape(encodeURIComponent(msgContent)));
+        // Create EML content
+        const emlContent = createEmlContent(emailData);
 
-        // Save attachments with content
+        // Create ZIP file
+        const zip = new JSZip();
+        
+        // Add email as .eml file
+        zip.file(`${emailData.subject || 'email'}.eml`, emlContent);
+
+        // Get all attachments and add to ZIP
         const attachmentPromises = attachments.map(att => {
           return new Promise((resolve, reject) => {
             item.getAttachmentContentAsync(att.id, function(result) {
               if (result.status === Office.AsyncResultStatus.Succeeded) {
+                // Convert base64 to binary
+                const content = result.value.content;
+                const byteCharacters = atob(content);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                  byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                
+                // Add to ZIP
+                zip.file(att.name, byteArray);
+                
                 resolve({
                   name: att.name,
                   size: att.size,
                   id: att.id,
                   contentType: att.contentType,
-                  content: result.value.content, // Base64 content
-                  format: result.value.format
+                  content: content
                 });
               } else {
                 resolve({
@@ -403,31 +415,41 @@
         });
 
         Promise.all(attachmentPromises).then(attachmentData => {
-          const task = {
-            title: "Task: " + (item.subject || "Untitled Email"),
-            from: item.from ? item.from.emailAddress : "Unknown",
-            date: new Date().toISOString(),
-            id: Date.now(),
-            attachments: attachmentData,
-            emailContent: msgBase64, // Store email as base64
-            emailSubject: item.subject || "No Subject"
-          };
+          // Generate ZIP file
+          zip.generateAsync({type: "blob"}).then(function(zipBlob) {
+            // Store ZIP file data as base64
+            const reader = new FileReader();
+            reader.onloadend = function() {
+              const zipBase64 = reader.result.split(',')[1];
+              
+              const task = {
+                title: "Task: " + (item.subject || "Untitled Email"),
+                from: item.from ? item.from.emailAddress : "Unknown",
+                date: new Date().toISOString(),
+                id: Date.now(),
+                attachments: attachmentData,
+                zipContent: zipBase64,
+                emailSubject: item.subject || "No Subject"
+              };
 
-          let stored = JSON.parse(localStorage.getItem("outlookTasks") || "[]");
-          stored.unshift(task);
-          localStorage.setItem("outlookTasks", JSON.stringify(stored));
+              let stored = JSON.parse(localStorage.getItem("outlookTasks") || "[]");
+              stored.unshift(task);
+              localStorage.setItem("outlookTasks", JSON.stringify(stored));
 
-          document.getElementById("content").innerHTML = `
-            <div class="alert alert-success mt-3">
-              <i class="fas fa-check-circle"></i> Task created successfully from email!
-              <br><small>Email saved as .msg file with ${attachmentData.length} attachment(s)</small>
-            </div>
-            <div class="mt-3">
-              <button class="btn btn-outline-primary w-100" onclick="showTaskList()">
-                <i class="fas fa-list"></i> View All Tasks
-              </button>
-            </div>
-          `;
+              document.getElementById("content").innerHTML = `
+                <div class="alert alert-success mt-3">
+                  <i class="fas fa-check-circle"></i> Task created successfully from email!
+                  <br><small>Email and ${attachmentData.length} attachment(s) saved in ZIP file</small>
+                </div>
+                <div class="mt-3">
+                  <button class="btn btn-outline-primary w-100" onclick="showTaskList()">
+                    <i class="fas fa-list"></i> View All Tasks
+                  </button>
+                </div>
+              `;
+            };
+            reader.readAsDataURL(zipBlob);
+          });
         });
       });
     }
@@ -461,7 +483,6 @@
       }
 
       try {
-        // Convert base64 to blob
         const byteCharacters = atob(attachment.content);
         const byteNumbers = new Array(byteCharacters.length);
         for (let i = 0; i < byteCharacters.length; i++) {
@@ -470,7 +491,6 @@
         const byteArray = new Uint8Array(byteNumbers);
         const blob = new Blob([byteArray], { type: attachment.contentType || 'application/octet-stream' });
         
-        // Create download link
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -487,39 +507,44 @@
       }
     }
 
-    // Download email as .msg file
-    function downloadEmailFile(taskIndex) {
+    // Download ZIP file
+    function downloadZipFile(taskIndex) {
       const stored = JSON.parse(localStorage.getItem("outlookTasks") || "[]");
       const task = stored[taskIndex];
       
-      if (!task || !task.emailContent) {
-        showToast('Email content not available', 'danger');
+      if (!task || !task.zipContent) {
+        showToast('ZIP file not available', 'danger');
         return;
       }
 
       try {
         // Convert base64 to blob
-        const msgContent = atob(task.emailContent);
-        const blob = new Blob([msgContent], { type: 'application/vnd.ms-outlook' });
+        const byteCharacters = atob(task.zipContent);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'application/zip' });
         
         // Create download link
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${task.emailSubject || 'email'}.msg`;
+        a.download = `${task.emailSubject || 'email'}.zip`;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
         
-        showToast('Email file downloaded successfully!', 'success');
+        showToast('ZIP file downloaded successfully!', 'success');
       } catch (error) {
         console.error('Download error:', error);
-        showToast('Failed to download email file', 'danger');
+        showToast('Failed to download ZIP file', 'danger');
       }
     }
 
-    // Show stored task list with downloadable attachments and email
+    // Show stored task list
     function showTaskList() {
       const stored = JSON.parse(localStorage.getItem("outlookTasks") || "[]");
       if (stored.length === 0) {
@@ -541,24 +566,28 @@
       html += stored.map((t, taskIndex) => {
         let attachmentsHtml = '';
         
-        // Email file download badge
-        let emailBadge = '';
-        if (t.emailContent) {
-          emailBadge = `
-            <span class="attachment-badge email-msg-badge" onclick="downloadEmailFile(${taskIndex})">
-              <i class="fas fa-envelope"></i> Email.msg
+        // ZIP file download badge
+        let zipBadge = '';
+        if (t.zipContent) {
+          const attachCount = t.attachments ? t.attachments.length : 0;
+          zipBadge = `
+            <span class="attachment-badge email-msg-badge" onclick="downloadZipFile(${taskIndex})">
+              <i class="fas fa-file-archive"></i> Email + ${attachCount} attachment(s).zip
               <i class="fas fa-download ms-1"></i>
             </span>
           `;
         }
 
-        // Regular attachments
+        // Regular attachments (individual download)
         if (t.attachments && t.attachments.length > 0) {
           attachmentsHtml = `
             <div class="mt-2">
-              <small class="text-muted"><i class="fas fa-paperclip"></i> Attachments:</small>
+              <small class="text-muted"><i class="fas fa-paperclip"></i> Downloads:</small>
               <div class="mt-1">
-                ${emailBadge}
+                ${zipBadge}
+              </div>
+              <small class="text-muted d-block mt-2">Or download individually:</small>
+              <div class="mt-1">
                 ${t.attachments.map((att, attIndex) => `
                   <span class="attachment-badge" onclick="downloadTaskAttachment(${taskIndex}, ${attIndex})">
                     <i class="fas fa-file"></i> ${att.name} (${formatBytes(att.size)})
@@ -568,12 +597,12 @@
               </div>
             </div>
           `;
-        } else if (emailBadge) {
+        } else if (zipBadge) {
           attachmentsHtml = `
             <div class="mt-2">
-              <small class="text-muted"><i class="fas fa-paperclip"></i> Files:</small>
+              <small class="text-muted"><i class="fas fa-paperclip"></i> Download:</small>
               <div class="mt-1">
-                ${emailBadge}
+                ${zipBadge}
               </div>
             </div>
           `;
